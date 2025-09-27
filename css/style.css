@@ -1,0 +1,26 @@
+body {
+  background-color: #ececec;
+}
+
+h3, h5 {
+  color: #0091d8;
+}
+
+table th, table td {
+  text-align: center;
+}
+
+.table td, 
+.table th {
+    padding: 0.2rem 0.1rem;
+}
+
+.btn-light-custom {
+  background-color: #e0e0e0; /* grigio chiaro */
+  color: #000; /* testo nero */
+  border-color: #ccc; /* bordo leggermente più scuro */
+}
+
+.btn {
+  white-space: nowrap;
+}

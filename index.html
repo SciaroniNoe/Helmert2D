@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Helmert 2D</title>
+  <link rel="icon" type="image/png" href="img/Logo1.png">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="p-4">
+
+  <h3 class="mb-3">Trasformazione Helmert 2D</h3>
+
+  <!-- Input -->
+  <div class="row mb-3">
+    <div class="col">
+      <h5>Coordinate nel sistema locale</h5>
+      <textarea id="local" class="form-control" rows="6" placeholder="No,E,N,H,Codice"></textarea>
+    </div>
+    <div class="col">
+      <h5>Coordinate nel sistema globale</h5>
+      <div class="d-flex">
+        <textarea id="global" class="form-control me-2" rows="6" placeholder="No,E,N,H,Codice"></textarea>
+        <button id="loadFile" class="btn btn-secondary btn-light-custom">Trova da file</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Bottoni -->
+  <button id="findCommon" class="btn btn-primary mb-5">Trova punti in comune</button>
+
+  <!-- Tabella punti in comune -->
+  <div id="commonPointsSection" class="row" style="display:none;">
+    <div class="col-md-4">
+      <h5>Punti in comune</h5>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>N.</th>
+            <th>Punto</th>
+            <th>Usa</th>
+          </tr>
+        </thead>
+        <tbody id="commonPoints"></tbody>
+      </table>
+
+      <!-- Messaggio numero punti -->
+      <div id="commonPointsMsg" class="mb-3"></div>
+
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="calcScale" checked>
+        <label class="form-check-label" for="calcScale">
+          Calcolare il fattore di scala
+        </label>
+      </div>
+    </div>
+    <div class="col-md-6"></div>
+  </div>
+
+  <button id="transform" class="btn btn-primary mb-5" style="display:none;">Esegui trasformazione</button>
+
+  <!-- Risultati -->
+  <div id="results" style="display:none;">
+    <div class="row">
+      <div class="col">
+        <h5>Parametri di trasformazione</h5>
+        <table class="table table-bordered mb-5">
+          <thead>
+            <tr>
+              <th>Parametro</th>
+              <th>Valore</th>
+            </tr>
+          </thead>
+          <tbody id="params"></tbody>
+        </table>
+      </div>
+      <div class="col">
+        <h5>Residui sui punti in comune</h5>
+        <table class="table table-bordered mb-5">
+          <thead>
+            <tr>
+              <th>N.</th>
+              <th>Punto</th>
+              <th>ΔE [m]</th>
+              <th>ΔN [m]</th>
+              <th>Norma [m]</th>
+            </tr>
+          </thead>
+          <tbody id="transformed"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <h5>Coordinate nuovi punti</h5>
+    <div class="row mb-5">
+      <div class="col-md-6">
+        <textarea id="newPoints" class="form-control" rows="6" readonly></textarea>
+      </div>
+      <div class="col-md-6"></div> <!-- metà pagina vuota -->
+    </div>
+
+
+    <h5>Esporta file</h5>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="expLocal">
+      <label class="form-check-label" for="expLocal">Punti nel sistema locale</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="expGlobal">
+      <label class="form-check-label" for="expGlobal">Punti nel sistema globale</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="expNuovi">
+      <label class="form-check-label" for="expTransformed">Nuovi punti nel sistema globale</label>
+    </div>
+    <button id="export" class="btn btn-secondary mt-2">Esporta</button>
+  </div>
+
+  <script src="js/script.js"></script>
+</body>
+
+</html>
