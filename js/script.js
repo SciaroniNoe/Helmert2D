@@ -1,4 +1,4 @@
-const developer_mode = false
+const developer_mode = true
 
 // Popoliamo automaticamente i campi se siamo in modalità sviluppatore
 if (false) {
@@ -112,18 +112,28 @@ function calculParamTransfHelmert(dictPtsGlobal, dictPtsLocal, noPtsFixes, calcS
 
 
 function parseCoordinates(text) {
+  // Questa funzione prende il testo contenente righe di coordinate con formato:
+  // "Nome,Est,Nord[,H[,Codice]]" (separatore virgola), ignora righe vuote e
+  // restituisce un oggetto { Nome: { E, N, H?, Code? } } con E/N come float.
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l);
   const coords = {};
   for (let line of lines) {
     const parts = line.split(",");
     if (parts.length >= 3) {
       const no = parts[0].trim();
-      coords[no] = {
+      const obj = {
         E: parseFloat(parts[1]), // Est
-        N: parseFloat(parts[2]), // Nord
-        H: parts[3] ? parseFloat(parts[3]) : 0.0, // opzionale
-        Code: parts[4] ? parts[4].trim() : ""
+        N: parseFloat(parts[2])  // Nord
       };
+      // Aggiungi H solo se presente e non vuoto
+      if (parts[3] !== undefined && parts[3].trim() !== "") {
+        obj.H = parseFloat(parts[3]);
+      }
+      // Aggiungi Code solo se presente e non vuoto
+      if (parts[4] !== undefined && parts[4].trim() !== "") {
+        obj.Code = parts[4].trim();
+      }
+      coords[no] = obj;
     }
   }
   return coords;
@@ -153,6 +163,9 @@ document.getElementById("loadFile").addEventListener("click", () => {
 
       const globalCoords = [];
 
+
+
+      // Processa ogni riga del file, estraendo nome, E, N. Aggiungi solo se il punto esiste nel sys locale
       for (let line of lines) {
         const parts = line.split(/\s+/); // separatore spazio
         const name = parts[0];          // primo campo come nome
@@ -161,11 +174,19 @@ document.getElementById("loadFile").addEventListener("click", () => {
 
         // Se il punto esiste nella lista locale, aggiungilo alla textarea globale
         if (localCoords[name]) {
-          const codiceLocale = localCoords[name].Code;
-          globalCoords.push(`${name},${E.toFixed(4)},${N.toFixed(4)},0.0,${codiceLocale}`);
+          const local = localCoords[name];
+          // Costruisci dinamicamente i campi separati da virgola evitando virgole vuote
+          const fields = [name, E.toFixed(3), N.toFixed(3)];
+          if (Object.prototype.hasOwnProperty.call(local, "H")) {
+            // manteniamo il formato numerico originale (senza trailing zeros forzati)
+            fields.push(Number.isFinite(local.H) ? local.H : local.H);
+          }
+          if (Object.prototype.hasOwnProperty.call(local, "Code")) {
+            fields.push(local.Code);
+          }
+          globalCoords.push(fields.join(","));
         }
       }
-
       document.getElementById("global").value = globalCoords.join("\n");
     };
 
@@ -177,7 +198,7 @@ document.getElementById("loadFile").addEventListener("click", () => {
 
 
 
-
+// Verifica se sono presenti punti in comune, popola tabella e gestisci stato bottone.
 document.getElementById("findCommon").addEventListener("click", () => {
   const localCoords = parseCoordinates(document.getElementById("local").value);
   const globalCoords = parseCoordinates(document.getElementById("global").value);
@@ -201,7 +222,7 @@ document.getElementById("findCommon").addEventListener("click", () => {
   // Controllo numero punti e messaggio
   const msgDiv = document.getElementById("commonPointsMsg");
   const numPoints = commonKeys.length;
-  if (numPoints >= 2) {
+  if (numPoints >= 2 || developer_mode) {
     msgDiv.textContent = `${numPoints} punti in comune (minimo 2)`;
     msgDiv.style.color = "green";
     document.getElementById("transform").disabled = false;
@@ -213,8 +234,7 @@ document.getElementById("findCommon").addEventListener("click", () => {
 
   // Mostriamo il bottone (anche se disabilitato)
   document.getElementById("transform").style.display = "inline-block";
-
-  // Aggiorniamo il messaggio se l’utente deseleziona punti
+  // Aggiorniamo il messaggio se l'utente deseleziona punti
   const checkboxes = tbody.querySelectorAll("input[type=checkbox]");
   checkboxes.forEach(cb => {
     cb.addEventListener("change", () => {
@@ -228,6 +248,7 @@ document.getElementById("findCommon").addEventListener("click", () => {
         msgDiv.style.color = "red";
         document.getElementById("transform").disabled = true;
       }
+      // chart will be rendered after transformation; do not render here
     });
   });
 });
@@ -249,7 +270,7 @@ document.getElementById("transform").addEventListener("click", () => {
   const tbodyParams = document.getElementById("params");
   tbodyParams.innerHTML = "";
   const params = [
-    ["Fattore scala ", helm.lamda_moyen.toFixed(5)],
+    ["Fattore scala ", helm.lamda_moyen.toFixed(4)],
     ["Rotazione [gon]", helm.alpha_moyen.toFixed(4)],
     ["Traslazione Est [m]", helm.EG.toFixed(3)],
     ["Traslazione Nord [m]", helm.NG.toFixed(3)]
@@ -296,19 +317,573 @@ document.getElementById("transform").addEventListener("click", () => {
   const newPts = Object.keys(helm.dictPtsLocal).filter(p => !Object.keys(helm.dictPtsGlobal).includes(p));
 
   document.getElementById("newPoints").value = newPts.map(p => {
-    const pt = helm.dictPtsGlobalTransf[p]; // useremo le coordinate locali, se vuoi trasformate puoi usare dictPtsGlobalTransf[p]
-    return `${p},${pt.E.toFixed(3)},${pt.N.toFixed(3)},0.0,10`;
+    const pt = helm.dictPtsGlobalTransf[p]; 
+    return `${p},${pt.E.toFixed(3)},${pt.N.toFixed(3)}`;
   }).join("\n");
 
 
   document.getElementById("results").style.display = "block";
+  // render chart showing points used in the transformation and the new points
+  renderExportChart(noPtsFixes);
 });
 
 
-document.getElementById("export").addEventListener("click", () => {
-  const parts = [];
-  if (document.getElementById("expLocal").checked) parts.push("Lista punti locali");
-  if (document.getElementById("expGlobal").checked) parts.push("Lista punti globali");
-  if (document.getElementById("expTransformed").checked) parts.push("Residui sui punti in comune");
-  alert("Esportazione simulata:\n" + parts.join("\n"));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Gestione stato del bottone Export e regole di esclusione tra Report e le altre tre opzioni
+(function setupExportControls() {
+  const cbLocal = document.getElementById("expLocal");
+  const cbGlobal = document.getElementById("expGlobal");
+  const cbNuovi = document.getElementById("expNuovi");
+  const cbReport = document.getElementById("expReport");
+  const btnExport = document.getElementById("export");
+
+  function updateExportEnabled() {
+    btnExport.disabled = !(cbLocal.checked || cbGlobal.checked || cbNuovi.checked || cbReport.checked);
+  }
+
+  // Selezionando il report deseleziona le prime tre; se selezioni una delle prime tre deseleziona il report
+  function onOtherChanged() {
+    if (cbLocal.checked || cbGlobal.checked || cbNuovi.checked) {
+      cbReport.checked = false;
+    }
+    updateExportEnabled();
+  }
+  function onReportChanged() {
+    if (cbReport.checked) {
+      cbLocal.checked = cbGlobal.checked = cbNuovi.checked = false;
+    }
+    updateExportEnabled();
+  }
+
+  cbLocal.addEventListener("change", onOtherChanged);
+  cbGlobal.addEventListener("change", onOtherChanged);
+  cbNuovi.addEventListener("change", onOtherChanged);
+  cbReport.addEventListener("change", onReportChanged);
+
+  // inizializza stato
+  updateExportEnabled();
+})();
+
+// Helper per costruire contenuto .coo con H = 0.0 se mancante
+function buildCooContent(includeLocal, includeGlobal, includeNuovi) {
+  const lines = [];
+  if (includeLocal) {
+    lines.push("#Coordinate sistema locale");
+    const txt = document.getElementById("local").value || "";
+    const inputLines = txt.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    for (let l of inputLines) {
+      const parts = l.split(",").map(p => p.trim());
+      const no = parts[0] || "";
+      const E = parts[1] ? parseFloat(parts[1]).toFixed(3) : "0.000";
+      const N = parts[2] ? parseFloat(parts[2]).toFixed(3) : "0.000";
+      const H = (parts[3] !== undefined && parts[3].trim() !== "") ? parseFloat(parts[3]).toFixed(3) : "0.000";
+      lines.push(`${no},${E},${N},${H}`);
+    }
+    lines.push(""); // linea vuota separatrice
+  }
+
+  if (includeGlobal) {
+    lines.push("#Coordinate sistema globale");
+    const txt = document.getElementById("global").value || "";
+    const inputLines = txt.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    for (let l of inputLines) {
+      const parts = l.split(",").map(p => p.trim());
+      const no = parts[0] || "";
+      const E = parts[1] ? parseFloat(parts[1]).toFixed(3) : "0.000";
+      const N = parts[2] ? parseFloat(parts[2]).toFixed(3) : "0.000";
+      const H = (parts[3] !== undefined && parts[3].trim() !== "") ? parseFloat(parts[3]).toFixed(3) : "0.000";
+      lines.push(`${no},${E},${N},${H}`);
+    }
+    lines.push("");
+  }
+
+  if (includeNuovi) {
+    lines.push("#Coordinate nuovi punti nel sistema globale");
+    const txt = document.getElementById("newPoints").value || "";
+    const inputLines = txt.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+    for (let l of inputLines) {
+      // se già formattato come CSV lo usiamo; altrimenti proviamo a normalizzare
+      if (l.includes(",")) {
+        const parts = l.split(",").map(p => p.trim());
+        const no = parts[0] || "";
+        const E = parts[1] ? parseFloat(parts[1]).toFixed(3) : "0.000";
+        const N = parts[2] ? parseFloat(parts[2]).toFixed(3) : "0.000";
+        const H = (parts[3] !== undefined && parts[3].trim() !== "") ? parseFloat(parts[3]).toFixed(3) : "0.000";
+        lines.push(`${no},${E},${N},${H}`);
+      } else {
+        // linea non CSV -> aggiungila così com'è
+        lines.push(l);
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\r\n");
+}
+
+
+
+
+
+// ...existing code...
+// Genera PDF semplice con sezioni e tabelle (testo formattato)
+async function buildPdfAndDownload(filename) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const leftMargin = 15;
+  const pageWidth = 210;
+  const rightLimit = pageWidth - 15;
+  const lineHeight = 7;
+  let y = 20;
+
+  function ensurePageSpace(h) {
+    if (y + h > 280) { doc.addPage(); y = 20; }
+  }
+
+  function addTitle(text) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor("#0091d8");
+    const textWidth = doc.getTextWidth(text);
+    doc.text(text, (pageWidth - textWidth) / 2, y);
+    doc.setTextColor(0, 0, 0);
+    y += lineHeight + 8;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+  }
+
+  function addSubtitleLeft(text) {
+    y += 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor("#0091d8");
+    doc.text(text, leftMargin, y);
+    doc.setTextColor(0, 0, 0);
+    //y += lineHeight;
+    y += 3;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+  }
+
+  // table: headerCols array, rows array-of-arrays (each row = array of cell strings), colWidths array (mm)
+function drawTable(headerCols, rows, colWidths) {
+  const rowH = 5;                    // altezza riga (header compreso)
+  const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+  const x0 = leftMargin;
+
+  // Assicura spazio prima di disegnare (header + almeno una riga)
+  ensurePageSpace(rowH * (1 + Math.min(rows.length, 3)));
+
+  doc.setLineWidth(0.2);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+
+  // Header: usa la stessa "griglia" delle righe
+  const headerTop = y;
+  const headerBottom = y + rowH;
+  const headerTextY = headerTop + rowH / 2 + 1; // aggiusta +1 se vuoi spostare verticalmente
+
+  // linea orizzontale superiore dell'header
+  doc.line(x0, headerTop, x0 + tableWidth, headerTop);
+
+  // disegna header e separatori verticali limitati all'altezza dell'header
+  let cx = x0;
+  for (let i = 0; i < headerCols.length; i++) {
+    const cw = colWidths[i];
+    const txt = String(headerCols[i]);
+    const tw = doc.getTextWidth(txt);
+    doc.text(txt, cx + (cw / 2) - (tw / 2), headerTextY);
+    cx += cw;
+    // separatore verticale solo per altezza header
+    doc.line(cx, headerTop, cx, headerBottom);
+  }
+
+  // linea inferiore dell'header e bordi esterni (segmenti)
+  doc.line(x0, headerBottom, x0 + tableWidth, headerBottom);
+  doc.line(x0, headerTop, x0, headerBottom);
+  doc.line(x0 + tableWidth, headerTop, x0 + tableWidth, headerBottom);
+
+  // sposta cursore alla prima riga
+  y = headerBottom;
+
+  // righe: coerenti con header (rowTop = y, rowBottom = y + rowH)
+  doc.setFont("helvetica", "normal");
+  for (const r of rows) {
+    ensurePageSpace(rowH + 2);
+
+    const rowTop = y;
+    const rowBottom = y + rowH;
+    const rowTextY = rowTop + rowH / 2 + 1;
+
+    // bordi esterni segmento riga
+    doc.line(x0, rowTop, x0, rowBottom);
+    doc.line(x0 + tableWidth, rowTop, x0 + tableWidth, rowBottom);
+
+    // celle e separatori verticali limitati a questa riga
+    let cx2 = x0;
+    for (let i = 0; i < colWidths.length; i++) {
+      const cw = colWidths[i];
+      const cell = r[i] !== undefined ? String(r[i]) : "";
+      if (i === 0) {
+        doc.text(cell, cx2 + 2, rowTextY);
+      } else if (!isNaN(parseFloat(cell)) && cell.trim() !== "") {
+        const tw = doc.getTextWidth(cell);
+        doc.text(cell, cx2 + cw - 2 - tw, rowTextY);
+      } else {
+        doc.text(cell, cx2 + 2, rowTextY);
+      }
+      cx2 += cw;
+      // separatore verticale per questo segmento di riga
+      doc.line(cx2, rowTop, cx2, rowBottom);
+    }
+
+    // linea orizzontale sotto la riga
+    doc.line(x0, rowBottom, x0 + tableWidth, rowBottom);
+
+    // avanza alla riga successiva
+    y = rowBottom;
+  }
+
+  // piccolo spazio dopo la tabella
+  y += 4;
+}
+
+
+  // Titolo principale
+  addTitle("Trasformazione Helmert 2D");
+
+  // Sempre: Coordinate sistema locale (tabella)
+  addSubtitleLeft("Coordinate sistema locale");
+  {
+    const txt = document.getElementById("local").value || "";
+    const rows = (txt.split(/\r?\n/).map(l => l.trim()).filter(l => l)).map((l, idx) => {
+      const p = l.split(",").map(x => x.trim());
+      const no = p[0] || "";
+      const E = p[1] ? parseFloat(p[1]).toFixed(3) : "0.000";
+      const N = p[2] ? parseFloat(p[2]).toFixed(3) : "0.000";
+      const H = (p[3] !== undefined && p[3].trim() !== "") ? parseFloat(p[3]).toFixed(3) : "0.000";
+      return [String(idx + 1), no, E, N, H];
+    });
+    if (rows.length === 0) rows.push(["--", "--", "--", "--", "--"]);
+    drawTable(["N.", "Punto", "E [m]", "N [m]", "H [m]"], rows, [12, 30, 30, 30, 30]);
+  }
+
+  // Sempre: Coordinate sistema globale (tabella)
+  addSubtitleLeft("Coordinate sistema globale");
+  {
+    const txt = document.getElementById("global").value || "";
+    const rows = (txt.split(/\r?\n/).map(l => l.trim()).filter(l => l)).map((l, idx) => {
+      const p = l.split(",").map(x => x.trim());
+      const no = p[0] || "";
+      const E = p[1] ? parseFloat(p[1]).toFixed(3) : "0.000";
+      const N = p[2] ? parseFloat(p[2]).toFixed(3) : "0.000";
+      const H = (p[3] !== undefined && p[3].trim() !== "") ? parseFloat(p[3]).toFixed(3) : "0.000";
+      return [String(idx + 1), no, E, N, H];
+    });
+    if (rows.length === 0) rows.push(["--", "--", "--", "--", "--"]);
+    drawTable(["N.", "Punto", "E [m]", "N [m]", "H [m]"], rows, [12, 30, 30, 30, 30]);
+  }
+
+  // Tabella punti in comune con stato "Usato" (Sì/No)
+  addSubtitleLeft("Punti in comune");
+  {
+    const rows = [];
+    const tbody = document.getElementById("commonPoints");
+    tbody.querySelectorAll("tr").forEach(tr => {
+      const tds = tr.querySelectorAll("td");
+      const idx = tds[0] ? tds[0].textContent.trim() : "";
+      const key = tds[1] ? tds[1].textContent.trim() : "";
+      const cb = tr.querySelector("input[type=checkbox]");
+      const used = cb ? (cb.checked ? "Sì" : "No") : "--";
+      rows.push([idx, key, used]);
+    });
+    if (rows.length === 0) rows.push(["--", "--", "--"]);
+    drawTable(["N.", "Punto", "Usato"], rows, [12, 30, 20]);
+  }
+
+  // Parametri di trasformazione (sempre stampati)
+  addSubtitleLeft("Parametri di trasformazione");
+  const paramsRows = [];
+  document.querySelectorAll("#params tr").forEach(tr => {
+    const tds = tr.querySelectorAll("td");
+    if (tds.length >= 2) paramsRows.push([tds[0].textContent.trim(), tds[1].textContent.trim()]);
+  });
+  if (paramsRows.length === 0) paramsRows.push(["--", "--"]);
+  drawTable(["Parametro", "Valore"], paramsRows, [60, 30]);
+
+  // Residui sui punti in comune (sempre stampati)
+  addSubtitleLeft("Residui sui punti in comune");
+  const residRows = [];
+  document.querySelectorAll("#transformed tr").forEach(tr => {
+    const tds = Array.from(tr.querySelectorAll("td")).map(td => td.textContent.trim());
+    if (tds.length) {
+      const de = isNaN(Number(tds[2])) ? tds[2] : Number(tds[2]).toFixed(3);
+      const dn = isNaN(Number(tds[3])) ? tds[3] : Number(tds[3]).toFixed(3);
+      const nm = isNaN(Number(tds[4])) ? tds[4] : Number(tds[4]).toFixed(3);
+      residRows.push([tds[0], tds[1], de, dn, nm]);
+    }
+  });
+  if (residRows.length === 0) residRows.push(["--", "--", "--", "--", "--"]);
+  drawTable(["N.", "Punto", "dE [m]", "dN [m]", "Norma [m]"], residRows, [12, 30, 30, 30, 30]);
+
+  // Coordinate nuovi punti nel sistema globale (sempre stampate)
+  addSubtitleLeft("Coordinate nuovi punti nel sistema globale");
+  const newTxt = document.getElementById("newPoints").value || "";
+  const newRows = (newTxt.split(/\r?\n/).map(l => l.trim()).filter(l => l)).map((l, idx) => {
+    const p = l.split(",").map(x => x.trim());
+    const no = p[0] || "";
+    const E = p[1] ? parseFloat(p[1]).toFixed(3) : "0.000";
+    const N = p[2] ? parseFloat(p[2]).toFixed(3) : "0.000";
+    const H = (p[3] !== undefined && p[3].trim() !== "") ? parseFloat(p[3]).toFixed(3) : "0.000";
+    return [String(idx + 1), no, E, N, H];
+  });
+  if (newRows.length === 0) newRows.push(["--", "--", "--", "--"]);
+  drawTable(["N.", "Punto", "E [m]", "N [m]", "H [m]"], newRows, [12, 30, 30, 30, 30]);
+
+  // Footer: data/ora a sinistra e numero pagina a destra su ogni pagina
+  const totalPages = doc.getNumberOfPages();
+  const now = new Date();
+  const dateStr = now.toLocaleString();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(9);
+    doc.text(dateStr, 15, 290);
+    const pageText = `Pagina ${i} / ${totalPages}`;
+    const pw = doc.getTextWidth(pageText);
+    doc.text(pageText, pageWidth - 15 - pw, 290);
+  }
+
+  // download
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+// ...existing code...
+
+
+
+
+
+// Export click handler aggiornato
+document.getElementById("export").addEventListener("click", async () => {
+  const cbLocal = document.getElementById("expLocal").checked;
+  const cbGlobal = document.getElementById("expGlobal").checked;
+  const cbNuovi = document.getElementById("expNuovi").checked;
+  const cbReport = document.getElementById("expReport").checked;
+
+  if (cbReport) {
+    // genera PDF
+    await buildPdfAndDownload("Trasformazione_Helmert_2D_Report.pdf");
+    return;
+  }
+
+  // Costruisci .coo con le sezioni richieste
+  const content = buildCooContent(cbLocal, cbGlobal, cbNuovi);
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "coordinate.coo";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 });
+
+
+
+
+
+
+
+// Convex hull (Monotonic chain) su array di punti {E, N, name}
+function convexHull(points) {
+  if (points.length <= 1) return points.slice();
+  const pts = points.slice().sort((a, b) => a.E === b.E ? a.N - b.N : a.E - b.E);
+  const cross = (o, a, b) => (a.E - o.E) * (b.N - o.N) - (a.N - o.N) * (b.E - o.E);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+function getPointsFromTextarea(id) {
+  const txt = document.getElementById(id).value || "";
+  const lines = txt.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+  return lines.map(l => {
+    const p = l.split(",").map(x => x.trim());
+    return { name: p[0] || "", E: parseFloat(p[1] || "0"), N: parseFloat(p[2] || "0") };
+  });
+}
+
+function drawTriangle(ctx, x, y, size, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x - size, y + size);
+  ctx.lineTo(x + size, y + size);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function renderExportChart(usedNames = null) {
+  const canvas = document.getElementById("exportChart");
+  const section = document.getElementById("exportChartSection");
+  const ctx = canvas.getContext("2d");
+
+  // Base set of global points (from textarea)
+  let globalPts = getPointsFromTextarea("global");
+
+  // If the caller provided the list of used point names (from the transformation), use that
+  if (usedNames && Array.isArray(usedNames) && usedNames.length > 0) {
+    globalPts = globalPts.filter(p => usedNames.includes(p.name));
+  } else {
+    // fallback: if there are checkboxes, use checked ones
+    const checkboxes = document.querySelectorAll("#commonPoints input[type=checkbox]");
+    if (checkboxes.length) {
+      const commonPoints = Array.from(checkboxes).map(cb => {
+        const td = cb.parentElement.previousElementSibling; // cell with name
+        return td ? td.textContent.trim() : "";
+      });
+      const checkedPoints = Array.from(checkboxes)
+        .map((cb, i) => cb.checked ? commonPoints[i] : null)
+        .filter(p => p);
+      globalPts = globalPts.filter(p => checkedPoints.includes(p.name));
+    }
+  }
+
+  const newPts = getPointsFromTextarea("newPoints");
+
+  if (globalPts.length === 0 && newPts.length === 0) {
+    section.style.display = "none";
+    return;
+  }
+
+  // mostra canvas
+  section.style.display = "block";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // bounding box
+  const all = globalPts.concat(newPts);
+  const minE = Math.min(...all.map(p => p.E));
+  const maxE = Math.max(...all.map(p => p.E));
+  const minN = Math.min(...all.map(p => p.N));
+  const maxN = Math.max(...all.map(p => p.N));
+  let dx = maxE - minE || 1;
+  let dy = maxN - minN || 1;
+
+  // area utile con padding
+  const pad = 40;
+  const W = canvas.width, H = canvas.height;
+  const usableW = W - 2 * pad;
+  const usableH = H - 2 * pad;
+
+  // scale uguali
+  const scale = Math.min(usableW / dx, usableH / dy);
+  const extraX = (usableW - dx * scale) / 2;
+  const extraY = (usableH - dy * scale) / 2;
+
+  const mapX = E => pad + extraX + (E - minE) * scale;
+  const mapY = N => H - (pad + extraY + (N - minN) * scale); // Y invertita
+
+  // disegna assi (leggeri)
+  ctx.strokeStyle = "#ddd";
+  ctx.lineWidth = 1;
+  // axis frame removed (no border requested) — keep drawing area without a stroked rectangle
+
+  // disegna inviluppo convesso dei punti globali
+  if (globalPts.length >= 3) {
+    const hull = convexHull(globalPts);
+    ctx.strokeStyle = "rgba(0,150,255,0.9)";
+    ctx.fillStyle = "rgba(0,150,255,0.08)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < hull.length; i++) {
+      const p = hull[i];
+      const x = mapX(p.E), y = mapY(p.N);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // disegna punti globali come triangoli blu
+  for (const p of globalPts) {
+    const x = mapX(p.E), y = mapY(p.N);
+    drawTriangle(ctx, x, y, 6, "#0b63c6");
+    // label
+    ctx.fillStyle = "#0b63c6";
+    ctx.font = "10px sans-serif";
+    ctx.fillText(p.name, x + 8, y + 4);
+  }
+
+  // disegna nuovi punti come cerchi rossi
+  for (const p of newPts) {
+    const x = mapX(p.E), y = mapY(p.N);
+    ctx.fillStyle = "#d9534f";
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#d9534f";
+    ctx.fillText(p.name, x + 8, y + 4);
+  }
+
+  // legenda
+  const lx = W - pad - 140, ly = pad;
+  ctx.fillStyle = "#fff";
+  // legend background without border
+  ctx.fillRect(lx - 6, ly - 6, 140, 52);
+  // global
+  drawTriangle(ctx, lx + 12, ly + 12, 6, "#0b63c6");
+  ctx.fillStyle = "#000";
+  ctx.font = "11px sans-serif";
+  ctx.fillText("Punti usati per il calcolo", lx + 28, ly + 16);
+  // new
+  ctx.fillStyle = "#d9534f";
+  ctx.beginPath();
+  ctx.arc(lx + 12, ly + 34, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.fillText("Nuovi punti", lx + 28, ly + 38);
+}
+
+// chiama il render al termine dell'export (mostra grafico nella pagina)
+(function hookExportChart() {
+  const exportBtn = document.getElementById("export");
+  if (!exportBtn) return;
+  const originalHandler = exportBtn.onclick; // non presente normalmente; comunque non usato
+  // aggiungi call finale dopo l'attuale listener completato: usa event listener separato
+  exportBtn.addEventListener("click", () => {
+    // piccola attesa per assicurare che i dati siano scritti nelle textarea prima del render
+    setTimeout(() => renderExportChart(), 200);
+  });
+})();
