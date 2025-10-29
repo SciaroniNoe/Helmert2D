@@ -1,4 +1,4 @@
-const developer_mode = true
+const developer_mode = false
 
 // Popoliamo automaticamente i campi se siamo in modalità sviluppatore
 if (false) {
