@@ -24,3 +24,8 @@ table th, table td {
 .btn {
   white-space: nowrap;
 }
+
+.btn-unstyled { border: none; background: transparent; padding: 0; }
+.btn-unstyled:focus { box-shadow: none; outline: none; }
+.btn-unstyled:hover { background: transparent; }
+.btn-unstyled img { width: 1.6rem; height: 1.6rem; display: block; cursor: pointer; user-select: none; }
