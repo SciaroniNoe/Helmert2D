@@ -11,8 +11,33 @@
 </head>
 
 <body class="p-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Trasformazione Helmert 2D</h3>
+    <button id="helmertInfoBtn" type="button" class="btn-unstyled" data-bs-toggle="modal"
+      data-bs-target="#helmertInfoModal" aria-label="Informazioni">
+      <img src="img/info.ico" alt="Informazioni" id="helmertInfoSvg">
+    </button>
+  </div>
 
-  <h3 class="mb-3">Trasformazione Helmert 2D</h3>
+  <!-- Modal informativo -->
+  <div class="modal fade" id="helmertInfoModal" tabindex="-1" aria-labelledby="helmertInfoModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="helmertInfoModalLabel">Trasformazione Helmert 2D</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+        </div>
+        <div class="modal-body">
+          <p>La trasformazione Helmert 2D è una trasformazione similare che permette di allineare due sistemi di
+            coordinate grazie a due
+            traslazioni, una rotazione ed eventualmente un fattore scala. Essa permette di trasformare un sistema locale
+            in un sistema globale minimizzando gli scarti sui punti in comune senza alterare la geometria. Un quadrato
+            rimarrà un quadrato.</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Input -->
   <div class="row mb-3">
@@ -57,8 +82,8 @@
           Calcolare il fattore di scala
         </label>
       </div>
+      <!-- chart moved to results (render after transform) -->
     </div>
-    <div class="col-md-6"></div>
   </div>
 
   <button id="transform" class="btn btn-primary mb-5" style="display:none;">Esegui trasformazione</button>
@@ -68,7 +93,7 @@
     <div class="row">
       <div class="col">
         <h5>Parametri di trasformazione</h5>
-        <table class="table table-bordered mb-5">
+  <table id="paramsTable" class="table table-bordered mb-5">
           <thead>
             <tr>
               <th>Parametro</th>
@@ -95,6 +120,11 @@
       </div>
     </div>
 
+    <div id="exportChartSection" class="mt-2 mb-5" style="display:none;">
+      <h5 class="mb-2">Ripartizione dei punti</h5>
+      <canvas id="exportChart" width="800" height="500" class="d-block mb-4" style="border:1px solid #e6e6e6; background:#fff; max-width:100%;"></canvas>
+    </div>
+
     <h5>Coordinate nuovi punti</h5>
     <div class="row mb-5">
       <div class="col-md-6">
@@ -115,11 +145,17 @@
     </div>
     <div class="form-check">
       <input class="form-check-input" type="checkbox" id="expNuovi">
-      <label class="form-check-label" for="expTransformed">Nuovi punti nel sistema globale</label>
+      <label class="form-check-label" for="expNuovi">Nuovi punti nel sistema globale</label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="expReport">
+      <label class="form-check-label" for="expReport">Report PDF</label>
     </div>
     <button id="export" class="btn btn-secondary mt-2">Esporta</button>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="js/script.js"></script>
 </body>
 
